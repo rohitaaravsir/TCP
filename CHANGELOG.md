@@ -114,5 +114,17 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
+## [1.6.0] — Sprint 6 — Interactive UI Hardening — 2026-07-09
+
+### Added
+- Centralized keyboard builders (`builders.py`) implementing inline and reply keyboards.
+- Interactive catalog browser with clickable product buttons, product detailed views, and Back/Main navigation menus.
+- Interactive checkout flows with inline options to `Submit Payment Proof` or `Cancel Order`.
+- Contextual reply suggestions for support chats (`Speak to Human`, `Exit Support`).
+- Administrative control panel dashboard (`/admin` and `⚙️ Admin Panel` button) mapping payments queue, open tickets, and broadcast instructions.
+- Real-time review alerts with inline interactive confirmation commands (`View Proof`, `Approve`, `Reject`).
+
+---
+
 _Next: Production Deployment & Maintenance_
 
