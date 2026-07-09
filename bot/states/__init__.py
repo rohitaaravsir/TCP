@@ -22,8 +22,10 @@ Usage:
 """
 from bot.states.payment import PaymentStates
 from bot.states.support import SupportStates
+from bot.states.product import AdminProductStates
 
 __all__ = [
     "PaymentStates",
     "SupportStates",
+    "AdminProductStates",
 ]

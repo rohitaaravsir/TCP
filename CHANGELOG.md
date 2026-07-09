@@ -114,15 +114,15 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
-## [1.6.0] — Sprint 6 — Interactive UI Hardening — 2026-07-09
+## [1.7.0] — Sprint 7 — OCR Verification & PDF Auto-Delivery — 2026-07-09
 
 ### Added
-- Centralized keyboard builders (`builders.py`) implementing inline and reply keyboards.
-- Interactive catalog browser with clickable product buttons, product detailed views, and Back/Main navigation menus.
-- Interactive checkout flows with inline options to `Submit Payment Proof` or `Cancel Order`.
-- Contextual reply suggestions for support chats (`Speak to Human`, `Exit Support`).
-- Administrative control panel dashboard (`/admin` and `⚙️ Admin Panel` button) mapping payments queue, open tickets, and broadcast instructions.
-- Real-time review alerts with inline interactive confirmation commands (`View Proof`, `Approve`, `Reject`).
+- **OCR Engine Implementation:** Integrated EasyOCR in `services/ocr_service.py` with templates for PhonePe, GPay, Paytm, and BHIM to extract Receiver, Amount, Date, Time, and UTR metrics.
+- **₹ Character & Decimal Normalization:** Added regex algorithms to normalize rupee signs (frequently misread as `7`, `8`, or `1` by OCR) and decimal point drops (e.g. `15000` instead of `150.00`).
+- **Fraud Prevention:** Added `UTRRepository` to track and prevent duplicate transaction reuse (double-spending protection).
+- **Auto-Fulfillment Engine:** Added `bot/handlers/fulfillment.py` to automatically confirm orders, deliver PDF documents (`bot.send_document`), and mark them as delivered.
+- **Admin File Linking:** Created an interactive `📁 Link PDF File` button in product details for admins to upload and associate PDF documents via FSM.
+- **Help Menu Expansion:** Updated `/help` output to list the new `/setproductfile` command.
 
 ---
 

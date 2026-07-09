@@ -28,6 +28,7 @@ from core.constants import MSG_ERROR_GENERIC
 from services.order_service import OrderService, OrderServiceError
 from services.support_service import SupportService
 from services.user_service import UserService
+from services.product_service import ProductService
 
 
 logger = logging.getLogger(__name__)
@@ -131,7 +132,10 @@ async def handle_view_proof(
 
 @router.message(Command("approvepayment"))
 async def handle_approve_payment(
-    message: Message, order_service: OrderService, bot: Bot
+    message: Message,
+    order_service: OrderService,
+    bot: Bot,
+    product_service: ProductService | None = None,
 ) -> None:
     """
     Handle /approvepayment <id> — confirm the order and notify the user.
@@ -148,29 +152,22 @@ async def handle_approve_payment(
     order_id = int(args[1])
 
     try:
-        # Confirm the order via service
-        order = await order_service.confirm_order(order_id)
-        await message.answer(
-            f"🟢 <b>Order #{order.id} Approved!</b>\n\nStatus updated to: {order.status_display}",
-            parse_mode="HTML",
+        from bot.handlers.fulfillment import fulfill_and_notify_order
+        # Confirm and deliver the digital product (PDF) if available
+        await fulfill_and_notify_order(
+            order_id=order_id,
+            order_service=order_service,
+            product_service=product_service,
+            bot=bot,
         )
 
-        # Notify the buyer
-        try:
-            await bot.send_message(
-                chat_id=order.user_id,
-                text=(
-                    f"🎉 <b>Payment Approved!</b>\n\n"
-                    f"📦 Order ID: <code>{order.id}</code>\n"
-                    f"💰 Amount: {order.amount_display}\n"
-                    f"🔖 Status: {order.status_display}\n\n"
-                    f"Your order is now being processed. Thank you for your purchase!"
-                ),
-                parse_mode="HTML",
-            )
-            logger.info("Buyer notified of payment approval | order_id=%s | buyer_id=%s", order.id, order.user_id)
-        except Exception as notify_exc:
-            logger.error("Failed to notify buyer | order_id=%s | error=%s", order.id, notify_exc)
+        order = await order_service.get_order(order_id)
+        status_display = order.status_display if order else "Approved"
+
+        await message.answer(
+            f"🟢 <b>Order #{order_id} Approved!</b>\n\nStatus updated to: {status_display}",
+            parse_mode="HTML",
+        )
 
     except OrderServiceError as exc:
         await message.answer(f"❌ {exc}")
@@ -493,6 +490,7 @@ async def handle_admin_callbacks(
     order_service: OrderService,
     support_service: SupportService,
     bot: Bot,
+    product_service: ProductService,
 ) -> None:
     """Handle admin interaction callbacks for payment proofs and Admin Panel options."""
     user = callback.from_user
@@ -538,7 +536,7 @@ async def handle_admin_callbacks(
         await handle_view_proof(new_message, order_service, bot)
     elif prefix == "admin_approve":
         new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/approvepayment {order_id}"})
-        await handle_approve_payment(new_message, order_service, bot)
+        await handle_approve_payment(new_message, order_service, bot, product_service)
     elif prefix == "admin_reject":
         new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/rejectpayment {order_id} Screenshot was invalid or unreadable. Please check and re-upload."})
         await handle_reject_payment(new_message, order_service, bot)

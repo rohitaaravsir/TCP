@@ -41,6 +41,7 @@ from health import build_health_app
 from repositories.user_repository import UserRepository
 from repositories.product_repository import ProductRepository
 from repositories.order_repository import OrderRepository
+from repositories.utr_repository import UTRRepository
 from services.user_service import UserService
 from services.product_service import ProductService
 from services.order_service import OrderService
@@ -68,6 +69,7 @@ class Application:
         self.product_service: ProductService | None = None
         self.order_service: OrderService | None = None
         self.ocr_service: OCRService | None = None
+        self.utr_repo: UTRRepository | None = None
         self.support_service: SupportService | None = None
         self.ai_provider: GeminiProvider | None = None
 
@@ -115,6 +117,7 @@ class Application:
         self.dispatcher["product_service"] = self.product_service
         self.dispatcher["order_service"] = self.order_service
         self.dispatcher["ocr_service"] = self.ocr_service
+        self.dispatcher["utr_repo"] = self.utr_repo
         self.dispatcher["support_service"] = self.support_service
         self.dispatcher["ai_provider"] = self.ai_provider
 
@@ -142,13 +145,24 @@ class Application:
         order_repo = OrderRepository(db.client)
         self.order_service = OrderService(order_repo, product_repo)
 
-        self.ocr_service = OCRService()
+        # UTR fraud-prevention repository
+        self.utr_repo = UTRRepository(db.client)
+
+        # OCR service — receiver name and UPI ID come from .env
+        self.ocr_service = OCRService(
+            receiver_name=settings.ocr_receiver_name,
+            upi_id=settings.ocr_upi_id,
+        )
 
         support_repo = SupportRepository(db.client)
         self.support_service = SupportService(support_repo)
         self.ai_provider = GeminiProvider()
 
-        logger.info("Services initialised.")
+        logger.info(
+            "Services initialised | ocr_receiver='%s' | ocr_upi='%s'",
+            settings.ocr_receiver_name or "(not set)",
+            settings.ocr_upi_id or "(not set)",
+        )
 
     # ------------------------------------------------------------------
     # Startup

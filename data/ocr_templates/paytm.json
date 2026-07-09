@@ -1,0 +1,26 @@
+{
+  "app_name": "Paytm",
+  "app_keywords": [
+    "paytm", "pay tm", "Paytm", "paytm.com",
+    "paytm bank"
+  ],
+  "receiver_patterns": [
+    "Paid to", "To", "Sent to", "Transfer to", "Money sent to"
+  ],
+  "amount_patterns": [
+    "₹", "Rs.", "Rs ", "INR", "Amount"
+  ],
+  "utr_patterns": [
+    "Order ID", "Transaction ID", "UTR", "Ref No",
+    "Reference No", "UPI Ref"
+  ],
+  "success_keywords": [
+    "Payment Successful", "Transfer Successful",
+    "Money Sent", "Success"
+  ],
+  "date_patterns": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ],
+  "notes": "Paytm receipts show Order ID, not UTR. Order ID pattern is alphanumeric."
+}

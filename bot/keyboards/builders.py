@@ -49,12 +49,16 @@ def get_catalogue_keyboard(products: list) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_product_detail_keyboard(product_id: int, price_display: str) -> InlineKeyboardMarkup:
+def get_product_detail_keyboard(product_id: int, price_display: str, is_admin: bool = False) -> InlineKeyboardMarkup:
     """Build the product detail purchase inline keyboard with navigation."""
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text=f"🛒 Buy Now ({price_display})", callback_data=f"buy:{product_id}")
     )
+    if is_admin:
+        builder.row(
+            InlineKeyboardButton(text="📁 Link PDF File", callback_data=f"prod_set_file:{product_id}")
+        )
     builder.row(
         InlineKeyboardButton(text="⬅ Back to Catalogue", callback_data="menu:catalogue"),
         InlineKeyboardButton(text="🏠 Main Menu", callback_data="menu:main"),

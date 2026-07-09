@@ -22,7 +22,10 @@ import logging
 
 from aiogram import Router, F
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
+
+from bot.states.product import AdminProductStates
 
 from config import settings
 from core.constants import MSG_ERROR_GENERIC
@@ -141,10 +144,14 @@ async def handle_product_detail_by_command(
             )
             return
 
+        is_admin_user = message.from_user.id in settings.admin_ids if message.from_user else False
+
         await message.answer(
             _format_product_detail(product),
             parse_mode="HTML",
-            reply_markup=get_product_detail_keyboard(product.id, product.price_display),
+            reply_markup=get_product_detail_keyboard(
+                product.id, product.price_display, is_admin=is_admin_user
+            ),
         )
         logger.info(
             "Product detail viewed | user_id=%s | product_id=%s",
@@ -248,3 +255,189 @@ async def handle_product_detail_callback(
         return
     new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/product {product_id}"})
     await handle_product_detail_by_command(new_message, product_service)
+
+
+@router.message(Command("setproductfile"))
+async def handle_set_product_file(
+    message: Message, product_service: ProductService
+) -> None:
+    """
+    Handle /setproductfile <product_id> — link a PDF file to a product for digital delivery.
+
+    Usage:
+      - Upload a PDF file with `/setproductfile <product_id>` in the caption.
+      OR
+      - Reply to a PDF file message with `/setproductfile <product_id>`.
+    """
+    user = message.from_user
+    if not user or user.id not in settings.admin_ids:
+        return  # Silently ignore unauthorized requests
+
+    # 1. Parse product ID
+    args = (message.text or message.caption or "").split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.answer(
+            "⚠️ Usage: Reply to a PDF document or upload a PDF with command in caption:\n"
+            "<code>/setproductfile &lt;product_id&gt;</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    product_id = int(args[1])
+
+    # 2. Check if product exists
+    try:
+        product = await product_service.get_product(product_id)
+        if product is None:
+            await message.answer(f"❌ Product <code>{product_id}</code> not found.", parse_mode="HTML")
+            return
+    except Exception as exc:
+        logger.exception("Failed to fetch product | product_id=%s", product_id)
+        await message.answer(MSG_ERROR_GENERIC)
+        return
+
+    # 3. Locate document file_id
+    document = None
+    if message.document:
+        document = message.document
+    elif message.reply_to_message and message.reply_to_message.document:
+        document = message.reply_to_message.document
+
+    if not document:
+        await message.answer(
+            "⚠️ Please reply to a PDF document or upload a PDF with this command in the caption."
+        )
+        return
+
+    # Optional: check if PDF
+    if document.mime_type != "application/pdf" and not (document.file_name or "").lower().endswith(".pdf"):
+        await message.answer("⚠️ The document must be a PDF file.")
+        return
+
+    file_id = document.file_id
+
+    try:
+        from schemas.product import ProductUpdateSchema
+        await product_service.update_product(
+            product_id,
+            ProductUpdateSchema(file_id=file_id)
+        )
+        await message.answer(
+            f"✅ <b>PDF File Linked!</b>\n\n"
+            f"📦 Product: <b>{product.name}</b> (ID: {product.id})\n"
+            f"📄 File: <code>{document.file_name}</code>\n"
+            f"🔑 File ID: <code>{file_id[:15]}...</code>\n\n"
+            f"This PDF will be sent automatically to the buyer as soon as the payment is confirmed.",
+            parse_mode="HTML",
+        )
+        logger.info(
+            "Product digital file set | admin_id=%s | product_id=%s | file_id=%s",
+            user.id, product_id, file_id
+        )
+    except Exception:
+        logger.exception("Failed to update product file | product_id=%s", product_id)
+        await message.answer(MSG_ERROR_GENERIC)
+
+
+# ── Interactive Admin PDF upload flow (inline button driven) ──────────────────
+
+@router.callback_query(F.data.startswith("prod_set_file:"))
+async def handle_prod_set_file_callback(
+    callback: CallbackQuery,
+    state: FSMContext,
+    product_service: ProductService,
+) -> None:
+    """Handle the admin clicking 'Link PDF File' from the product detail keyboard."""
+    user = callback.from_user
+    if not user or user.id not in settings.admin_ids:
+        await callback.answer("❌ Unauthorized.", show_alert=True)
+        return
+
+    product_id = int(callback.data.split(":", 2)[1])
+
+    try:
+        product = await product_service.get_product(product_id)
+        if product is None:
+            await callback.answer("❌ Product not found.")
+            return
+
+        # Start FSM flow
+        await state.set_state(AdminProductStates.waiting_for_pdf)
+        await state.update_data(product_id=product_id)
+
+        await callback.answer()
+        await callback.message.answer(
+            f"📎 <b>Link PDF to product:</b> <u>{product.name}</u> (ID: {product.id})\n\n"
+            f"📥 Please upload/send the PDF document file now.\n\n"
+            f"❌ Send <code>/cancel</code> to abort this action.",
+            parse_mode="HTML",
+        )
+
+    except Exception:
+        logger.exception("handle_admin_set_file_callback failed | product_id=%s", product_id)
+        await callback.answer("❌ Error initiating flow.")
+
+
+@router.message(AdminProductStates.waiting_for_pdf, Command("cancel"))
+@router.message(AdminProductStates.waiting_for_pdf, F.text.lower() == "cancel")
+async def handle_admin_set_file_cancel(message: Message, state: FSMContext) -> None:
+    """Cancel PDF file linking flow."""
+    await state.clear()
+    await message.answer("❌ Action cancelled. PDF file was not linked.")
+
+
+@router.message(AdminProductStates.waiting_for_pdf, F.document)
+async def handle_admin_set_file_doc(
+    message: Message,
+    state: FSMContext,
+    product_service: ProductService,
+) -> None:
+    """Receive the uploaded PDF document and link it to the product."""
+    user = message.from_user
+    if not user or user.id not in settings.admin_ids:
+        return
+
+    data = await state.get_data()
+    product_id = data.get("product_id")
+    if not product_id:
+        await state.clear()
+        return
+
+    document = message.document
+    if document.mime_type != "application/pdf" and not (document.file_name or "").lower().endswith(".pdf"):
+        await message.answer("⚠️ The document must be a PDF file. Please upload a valid PDF document.")
+        return
+
+    file_id = document.file_id
+
+    try:
+        product = await product_service.get_product(product_id)
+        if product is None:
+            await state.clear()
+            await message.answer("❌ Product not found.")
+            return
+
+        from schemas.product import ProductUpdateSchema
+        await product_service.update_product(
+            product_id,
+            ProductUpdateSchema(file_id=file_id)
+        )
+
+        await state.clear()
+        await message.answer(
+            f"✅ <b>PDF File Linked successfully!</b>\n\n"
+            f"📦 Product: <b>{product.name}</b> (ID: {product.id})\n"
+            f"📄 File: <code>{document.file_name}</code>\n"
+            f"🔑 File ID: <code>{file_id[:15]}...</code>\n\n"
+            f"This product will now be automatically delivered to users upon verified payment! 🚀",
+            parse_mode="HTML",
+        )
+        logger.info(
+            "Product digital file set via callback | admin_id=%s | product_id=%s | file_id=%s",
+            user.id, product_id, file_id
+        )
+
+    except Exception:
+        logger.exception("handle_admin_set_file_doc failed | product_id=%s", product_id)
+        await message.answer(MSG_ERROR_GENERIC)
+

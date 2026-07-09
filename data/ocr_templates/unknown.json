@@ -1,0 +1,27 @@
+{
+  "app_name": "Unknown/Generic UPI",
+  "app_keywords": [
+    "upi", "bank transfer", "neft", "imps", "transfer"
+  ],
+  "receiver_patterns": [
+    "Paid to", "To", "Transferred to", "Sent to",
+    "Beneficiary", "Receiver"
+  ],
+  "amount_patterns": [
+    "₹", "Rs.", "Rs ", "INR", "Amount", "Debit"
+  ],
+  "utr_patterns": [
+    "UTR", "Transaction ID", "Ref No", "Reference",
+    "UPI Ref", "Txn ID", "Txn No"
+  ],
+  "success_keywords": [
+    "Success", "Successful", "Completed", "Approved",
+    "Done", "Paid", "Sent", "Transferred"
+  ],
+  "date_patterns": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Today", "Yesterday"
+  ],
+  "notes": "Fallback template for unrecognized apps. Uses generic UPI patterns that work across most Indian payment apps."
+}
