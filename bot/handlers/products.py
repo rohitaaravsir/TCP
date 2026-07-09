@@ -22,11 +22,13 @@ import logging
 
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 
 from config import settings
 from core.constants import MSG_ERROR_GENERIC
+from bot.keyboards import get_product_detail_keyboard, get_catalogue_keyboard
 from services.product_service import ProductService
+from services.order_service import OrderService
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +89,11 @@ async def handle_products(message: Message, product_service: ProductService) -> 
     """
     try:
         products = await product_service.get_catalogue()
-        text = _format_catalogue(products[:_CATALOGUE_PAGE_SIZE])
-        await message.answer(text, parse_mode="HTML")
+        text = "🛒 <b>Product Catalogue</b>\n\nSelect a product to view its details:"
+        try:
+            await message.edit_text(text, parse_mode="HTML", reply_markup=get_catalogue_keyboard(products[:_CATALOGUE_PAGE_SIZE]))
+        except Exception:
+            await message.answer(text, parse_mode="HTML", reply_markup=get_catalogue_keyboard(products[:_CATALOGUE_PAGE_SIZE]))
 
         logger.info(
             "Catalogue displayed | user_id=%s | count=%d",
@@ -136,7 +141,11 @@ async def handle_product_detail_by_command(
             )
             return
 
-        await message.answer(_format_product_detail(product), parse_mode="HTML")
+        await message.answer(
+            _format_product_detail(product),
+            parse_mode="HTML",
+            reply_markup=get_product_detail_keyboard(product.id, product.price_display),
+        )
         logger.info(
             "Product detail viewed | user_id=%s | product_id=%s",
             message.from_user.id if message.from_user else "unknown",
@@ -145,6 +154,24 @@ async def handle_product_detail_by_command(
     except Exception:
         logger.exception("handle_product_detail failed | product_id=%s", product_id)
         await message.answer(MSG_ERROR_GENERIC)
+
+
+@router.callback_query(F.data.startswith("buy:"))
+async def handle_buy_callback(
+    callback: CallbackQuery,
+    order_service: OrderService,
+) -> None:
+    """Handle click on Buy Now inline button by initiating order creation."""
+    product_id = int(callback.data.split(":", 1)[1])
+    await callback.answer()
+
+    message = callback.message
+    if not message:
+        return
+    new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/order {product_id}"})
+
+    from bot.handlers.orders import handle_place_order
+    await handle_place_order(new_message, order_service)
 
 
 # ---------------------------------------------------------------------------
@@ -205,3 +232,19 @@ async def handle_toggle_product(
     except Exception:
         logger.exception("handle_toggle_product failed | product_id=%s", product_id)
         await message.answer(MSG_ERROR_GENERIC)
+
+
+@router.callback_query(F.data.startswith("product_detail:"))
+async def handle_product_detail_callback(
+    callback: CallbackQuery,
+    product_service: ProductService,
+) -> None:
+    """Handle product details selection from the catalogue list."""
+    product_id = int(callback.data.split(":", 1)[1])
+    await callback.answer()
+
+    message = callback.message
+    if not message:
+        return
+    new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/product {product_id}"})
+    await handle_product_detail_by_command(new_message, product_service)

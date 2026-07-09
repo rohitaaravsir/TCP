@@ -22,7 +22,9 @@ from bot.handlers.admin import (
     handle_broadcast,
     handle_ban_user,
     handle_unban_user,
+    handle_admin_callbacks,
 )
+from aiogram.types import CallbackQuery
 from config import settings
 from schemas.order import OrderSchema, OrderStatus
 
@@ -338,5 +340,31 @@ async def test_unban_user_success(mock_message):
     mock_user_service.get_user.assert_awaited_once_with(999)
     mock_user_service.unban_user.assert_awaited_once_with(999)
     assert "unbanned" in mock_message.answer.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_handle_admin_callbacks_menu_payments(mock_message):
+    """Admin callback menu:payments should trigger pending payments handler."""
+    callback = MagicMock(spec=CallbackQuery)
+    callback.data = "admin_menu:payments"
+    callback.answer = AsyncMock()
+    callback.from_user = User(id=123456789, is_bot=False, first_name="Admin", username="admin") # matching setup_admin_ids fixture ID
+    
+    mock_msg = MagicMock(spec=Message)
+    mock_copied_msg = MagicMock(spec=Message)
+    mock_msg.model_copy.return_value = mock_copied_msg
+    callback.message = mock_msg
+
+    mock_order_service = AsyncMock()
+    mock_support_service = AsyncMock()
+    mock_bot = AsyncMock()
+
+    with patch("bot.handlers.admin.handle_pending_payments", new_callable=AsyncMock) as mock_pending:
+        await handle_admin_callbacks(callback, mock_order_service, mock_support_service, mock_bot)
+
+        callback.answer.assert_awaited_once()
+        mock_pending.assert_awaited_once_with(mock_copied_msg, mock_order_service)
+        mock_msg.model_copy.assert_called_once_with(update={"from_user": callback.from_user, "text": "/pendingpayments"})
+
 
 

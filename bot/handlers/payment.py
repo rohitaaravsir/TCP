@@ -21,7 +21,9 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, PhotoSize
+from aiogram.types import Message, PhotoSize, CallbackQuery
+
+from config import settings
 
 from bot.states.payment import PaymentStates
 from core.constants import MSG_ERROR_GENERIC
@@ -188,6 +190,26 @@ async def handle_payment_photo(
                 f"Use /orderstatus {order.id} to track your order.",
                 parse_mode="HTML",
             )
+
+            # Send real-time alert to all admins with review buttons
+            admin_text = (
+                f"⚠️ <b>Payment Proof Submitted!</b>\n\n"
+                f"📦 Order ID: <code>{order.id}</code>\n"
+                f"💰 Amount: {order.amount_display}\n"
+                f"👤 User: <b>{user.full_name or user.first_name}</b> (ID: <code>{user.id}</code>)\n\n"
+                f"Use the buttons below to review this payment:"
+            )
+            for admin_id in settings.admin_ids:
+                try:
+                    from bot.keyboards import get_admin_review_keyboard
+                    await bot.send_message(
+                        chat_id=admin_id,
+                        text=admin_text,
+                        parse_mode="HTML",
+                        reply_markup=get_admin_review_keyboard(order.id),
+                    )
+                except Exception as alert_exc:
+                    logger.error("Failed to alert admin %s of new payment proof | error=%s", admin_id, alert_exc)
         else:
             # Auto-approved path (Sprint 5 — OCR confidence >= threshold)
             await message.answer(
@@ -216,6 +238,25 @@ async def handle_payment_photo(
         )
         await state.clear()
         await message.answer(MSG_ERROR_GENERIC)
+
+
+@router.callback_query(F.data.startswith("pay_proof:"))
+async def handle_pay_proof_callback(
+    callback: CallbackQuery,
+    state: FSMContext,
+    order_service: OrderService,
+) -> None:
+    """Handle click on Submit Payment Proof inline button."""
+    order_id = int(callback.data.split(":", 1)[1])
+    await callback.answer()
+
+    message = callback.message
+    if not message:
+        return
+    new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/pay {order_id}"})
+
+    from bot.handlers.payment import handle_pay
+    await handle_pay(new_message, state, order_service)
 
 
 # ---------------------------------------------------------------------------

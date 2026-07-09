@@ -1,15 +1,29 @@
 """
-bot/keyboards package
+bot/keyboards
 
-Telegram inline and reply keyboard builders.
-
-Future keyboards to implement here:
-  - MainMenuKeyboard    — main navigation keyboard
-  - ProductListKeyboard — paginated product listing
-  - OrderKeyboard       — order action buttons
-  - SupportKeyboard     — support menu
-  - AdminKeyboard       — admin panel navigation
-
-All keyboards must return InlineKeyboardMarkup or ReplyKeyboardMarkup
-instances, never raw dictionaries.
+Keyboards package initialization.
 """
+
+from bot.keyboards.builders import (
+    get_main_menu_keyboard,
+    get_catalogue_keyboard,
+    get_product_detail_keyboard,
+    get_order_checkout_keyboard,
+    get_support_menu_keyboard,
+    get_admin_panel_keyboard,
+    get_back_to_admin_keyboard,
+    get_generic_main_menu_keyboard,
+    get_admin_review_keyboard,
+)
+
+__all__ = [
+    "get_main_menu_keyboard",
+    "get_catalogue_keyboard",
+    "get_product_detail_keyboard",
+    "get_order_checkout_keyboard",
+    "get_support_menu_keyboard",
+    "get_admin_panel_keyboard",
+    "get_back_to_admin_keyboard",
+    "get_generic_main_menu_keyboard",
+    "get_admin_review_keyboard",
+]

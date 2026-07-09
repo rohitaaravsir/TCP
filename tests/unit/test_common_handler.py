@@ -7,9 +7,9 @@ Unit tests for bot/handlers/common.py
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
-from aiogram.types import Message, User
+from aiogram.types import Message, User, CallbackQuery
 
-from bot.handlers.common import handle_start, handle_help, handle_ping
+from bot.handlers.common import handle_start, handle_help, handle_ping, handle_menu_callback
 from schemas.user import UserSchema
 
 
@@ -81,3 +81,35 @@ async def test_handle_ping(mock_message):
     mock_message.answer.assert_awaited_once_with("🏓 Pinging...")
     sent_msg.edit_text.assert_awaited_once()
     assert "Latency" in sent_msg.edit_text.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_handle_menu_callback():
+    """Should intercept menu callback queries and trigger the respective handlers."""
+    callback = MagicMock(spec=CallbackQuery)
+    callback.data = "menu:catalogue"
+    callback.answer = AsyncMock()
+    callback.from_user = User(id=111, is_bot=False, first_name="T", username="t")
+    
+    mock_msg = MagicMock(spec=Message)
+    mock_copied_msg = MagicMock(spec=Message)
+    mock_copied_msg.from_user = callback.from_user
+    mock_msg.model_copy.return_value = mock_copied_msg
+    callback.message = mock_msg
+
+    mock_state = AsyncMock()
+    mock_user_service = AsyncMock()
+    mock_product_service = AsyncMock()
+    mock_order_service = AsyncMock()
+    mock_support_service = AsyncMock()
+
+    with patch("bot.handlers.products.handle_products", new_callable=AsyncMock) as mock_handle_products:
+        await handle_menu_callback(
+            callback, mock_state, mock_user_service,
+            mock_product_service, mock_order_service, mock_support_service
+        )
+
+        callback.answer.assert_awaited_once()
+        mock_handle_products.assert_awaited_once_with(mock_copied_msg, mock_product_service)
+        mock_msg.model_copy.assert_called_once_with(update={"from_user": callback.from_user})
+
