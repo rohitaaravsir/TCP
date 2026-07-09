@@ -1,0 +1,14 @@
+# storage directory
+#
+# This directory holds temporary files used during processing.
+# Subdirectories created by future modules:
+#
+#   storage/screenshots/   — payment screenshots uploaded by users
+#   storage/cache/         — OCR result cache
+#   storage/downloads/     — digital products awaiting delivery
+#   storage/processing/    — files currently being processed
+#
+# All files here are TRANSIENT.
+# Do not store permanent data here — use Supabase Storage for that.
+#
+# This file ensures the directory is tracked by git.

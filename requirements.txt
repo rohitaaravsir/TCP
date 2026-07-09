@@ -1,0 +1,24 @@
+# ============================================================
+# TCP — Telegram Commerce Platform
+# Requirements — Sprint 0: Project Foundation
+# ============================================================
+
+# --- Telegram Bot Framework ---
+aiogram==3.13.1
+
+# --- Database (Supabase) ---
+supabase==2.10.0
+
+# --- Configuration (typed env-var loading) ---
+pydantic-settings==2.7.0
+pydantic==2.9.2
+
+# --- HTTP Server (health check endpoint) ---
+# aiohttp version is managed by aiogram's dependency resolver
+
+# --- Environment Variables ---
+python-dotenv==1.0.1
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.24.0
