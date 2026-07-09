@@ -11,7 +11,7 @@ import pytest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, PhotoSize, User
 
-from bot.handlers.payment import handle_pay_initiate, handle_payment_photo, handle_payment_cancel
+from bot.handlers.payment import handle_pay_initiate, handle_payment_photo, handle_payment_cancel, handle_pay_proof_callback
 from bot.states.payment import PaymentStates
 from services.ocr_service import OCRResult
 from services.order_service import OrderServiceError
@@ -128,7 +128,7 @@ async def test_payment_photo_success_under_review(
     mock_message, mock_state, mock_order_service, mock_ocr_service
 ):
     """Should run OCR, submit proof, clear FSM, and notify under review."""
-    mock_state.get_data.return_value = {"order_id": 12, "amount": "150.00"}
+    mock_state.get_data.return_value = {"order_id": 12, "amount": "150.00", "order_created_at": None}
     
     photo = MagicMock(spec=PhotoSize)
     photo.file_id = "best_file_id"
@@ -137,7 +137,10 @@ async def test_payment_photo_success_under_review(
     mock_ocr_service.verify_payment.return_value = OCRResult(
         confidence=0.0,
         requires_review=True,
+        is_near_miss=False,
         detected_amount=None,
+        detected_app="GPay",
+        utr_number=None,
         raw_text="",
         notes="Review needed"
     )
@@ -145,12 +148,19 @@ async def test_payment_photo_success_under_review(
     submitted_order = _make_order_schema(order_id=12, status=OrderStatus.PAYMENT_SUBMITTED)
     mock_order_service.submit_payment_proof.return_value = submitted_order
 
-    mock_bot = MagicMock()
-    await handle_payment_photo(mock_message, mock_state, mock_order_service, mock_ocr_service, mock_bot)
+    mock_bot = AsyncMock()
+    mock_file = MagicMock()
+    mock_file.file_path = "photos/file.jpg"
+    mock_bot.get_file.return_value = mock_file
+    mock_bot.download_file.return_value = b"mocked_image_bytes"
+
+    with patch("bot.handlers.payment.settings.feature_ocr_enabled", True):
+        await handle_payment_photo(mock_message, mock_state, mock_order_service, mock_ocr_service, mock_bot)
 
     mock_ocr_service.verify_payment.assert_awaited_once_with(
-        file_id="best_file_id",
-        expected_amount=Decimal("150.00")
+        image_bytes=b"mocked_image_bytes",
+        expected_amount=Decimal("150.00"),
+        order_created_at=None
     )
     mock_order_service.submit_payment_proof.assert_awaited_once_with(
         order_id=12,
@@ -159,6 +169,7 @@ async def test_payment_photo_success_under_review(
     )
     mock_state.clear.assert_awaited_once()
     assert "Screenshot Received" in mock_message.answer.call_args[0][0]
+
 
 
 # ---------------------------------------------------------------------------
@@ -171,3 +182,41 @@ async def test_payment_cancel(mock_message, mock_state):
     await handle_payment_cancel(mock_message, mock_state)
     mock_state.clear.assert_awaited_once()
     assert "cancelled" in mock_message.answer.call_args[0][0]
+
+
+# ---------------------------------------------------------------------------
+# Tests: handle_pay_proof_callback
+# ---------------------------------------------------------------------------
+
+from aiogram.types import CallbackQuery
+
+@pytest.mark.asyncio
+async def test_handle_pay_proof_callback(mock_state, mock_order_service):
+    """Should intercept click on pay proof callback and trigger handle_pay_initiate."""
+    callback = MagicMock(spec=CallbackQuery)
+    callback.data = "pay_proof:12"
+    callback.answer = AsyncMock()
+    callback.from_user = User(id=111, is_bot=False, first_name="Test", last_name="User")
+    
+    mock_msg = MagicMock(spec=Message)
+    mock_msg.answer = AsyncMock()
+    
+    def fake_model_copy(update=None):
+        copied = MagicMock(spec=Message)
+        copied.from_user = update.get("from_user") if update else None
+        copied.text = update.get("text") if update else None
+        return copied
+    mock_msg.model_copy = fake_model_copy
+    callback.message = mock_msg
+
+    with patch("bot.handlers.payment.handle_pay_initiate", new_callable=AsyncMock) as mock_initiate:
+        await handle_pay_proof_callback(callback, mock_state, mock_order_service)
+        
+        callback.answer.assert_awaited_once()
+        mock_initiate.assert_awaited_once()
+        # Verify it extracts order_id correctly
+        args = mock_initiate.call_args[0]
+        assert args[0].text == "/pay 12"
+        assert args[1] == mock_state
+        assert args[2] == mock_order_service
+

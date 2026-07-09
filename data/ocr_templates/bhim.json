@@ -1,0 +1,25 @@
+{
+  "app_name": "BHIM",
+  "app_keywords": [
+    "bhim", "bhim upi", "BHIM", "bhimupi",
+    "npci", "bhim app"
+  ],
+  "receiver_patterns": [
+    "Paid to", "To", "Transferred to"
+  ],
+  "amount_patterns": [
+    "₹", "Rs.", "Rs ", "INR", "Amount"
+  ],
+  "utr_patterns": [
+    "UTR No", "UTR", "Transaction ID", "UPI Ref",
+    "Reference Number"
+  ],
+  "success_keywords": [
+    "Payment Successful", "Success", "Transaction Successful"
+  ],
+  "date_patterns": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ],
+  "notes": "BHIM is NPCI's official app. Receipts are minimal — usually just UTR, amount, and receiver VPA."
+}

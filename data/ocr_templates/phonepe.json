@@ -1,0 +1,26 @@
+{
+  "app_name": "PhonePe",
+  "app_keywords": [
+    "phonepe", "phone pe", "PhonePe", "phonepe.com",
+    "phone-pe"
+  ],
+  "receiver_patterns": [
+    "Paid to", "To", "Transferred to", "Sent to", "Paid"
+  ],
+  "amount_patterns": [
+    "₹", "Rs.", "Rs ", "INR", "Amount Paid", "Amount"
+  ],
+  "utr_patterns": [
+    "UTR", "Transaction ID", "UPI Ref No", "Ref",
+    "Transaction Ref No", "Reference ID"
+  ],
+  "success_keywords": [
+    "Payment Successful", "Transfer Successful", "Success",
+    "Payment Done", "Paid Successfully"
+  ],
+  "date_patterns": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ],
+  "notes": "PhonePe full receipts always contain UTR No and green tick. Partial screenshots may only show amount and name."
+}

@@ -1,0 +1,30 @@
+{
+  "app_name": "GPay",
+  "app_keywords": [
+    "google pay", "gpay", "g pay", "google.com/pay",
+    "googlepay", "pay.google"
+  ],
+  "receiver_patterns": [
+    "Paid to", "To", "Sent to", "You paid", "Paid"
+  ],
+  "amount_patterns": [
+    "₹", "Rs.", "Rs ", "INR", "Amount"
+  ],
+  "utr_patterns": [
+    "UPI transaction ID", "Transaction ID", "UTR", "Ref No",
+    "UPI Ref", "Reference number"
+  ],
+  "success_keywords": [
+    "Payment successful", "Paid", "Success", "Sent",
+    "Transaction successful", "completed"
+  ],
+  "date_patterns": [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Today", "Yesterday"
+  ],
+  "chat_mode_keywords": [
+    "You paid", "Paid to"
+  ],
+  "notes": "GPay has two screenshot modes: full receipt (has UPI Txn ID) and chat bubble (only shows amount, date, name). Both are valid."
+}

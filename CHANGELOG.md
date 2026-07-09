@@ -114,5 +114,17 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
+## [1.7.0] — Sprint 7 — OCR Verification & PDF Auto-Delivery — 2026-07-09
+
+### Added
+- **OCR Engine Implementation:** Integrated EasyOCR in `services/ocr_service.py` with templates for PhonePe, GPay, Paytm, and BHIM to extract Receiver, Amount, Date, Time, and UTR metrics.
+- **₹ Character & Decimal Normalization:** Added regex algorithms to normalize rupee signs (frequently misread as `7`, `8`, or `1` by OCR) and decimal point drops (e.g. `15000` instead of `150.00`).
+- **Fraud Prevention:** Added `UTRRepository` to track and prevent duplicate transaction reuse (double-spending protection).
+- **Auto-Fulfillment Engine:** Added `bot/handlers/fulfillment.py` to automatically confirm orders, deliver PDF documents (`bot.send_document`), and mark them as delivered.
+- **Admin File Linking:** Created an interactive `📁 Link PDF File` button in product details for admins to upload and associate PDF documents via FSM.
+- **Help Menu Expansion:** Updated `/help` output to list the new `/setproductfile` command.
+
+---
+
 _Next: Production Deployment & Maintenance_
 

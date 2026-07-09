@@ -20,13 +20,15 @@ import logging
 
 from aiogram import Bot, Router, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 
 from config import settings
+from bot.keyboards import get_back_to_admin_keyboard
 from core.constants import MSG_ERROR_GENERIC
 from services.order_service import OrderService, OrderServiceError
 from services.support_service import SupportService
 from services.user_service import UserService
+from services.product_service import ProductService
 
 
 logger = logging.getLogger(__name__)
@@ -64,7 +66,7 @@ async def handle_pending_payments(
         orders = await order_service.list_pending_payments()
 
         if not orders:
-            await message.answer("📥 <b>Pending Payments</b>\n\nNo payments are awaiting review.")
+            await message.answer("📥 <b>Pending Payments</b>\n\nNo payments are awaiting review.", reply_markup=get_back_to_admin_keyboard())
             return
 
         lines = ["📥 <b>Pending Payments Awaiting Review</b>\n"]
@@ -78,7 +80,7 @@ async def handle_pending_payments(
             )
             lines.append("")
 
-        await message.answer("\n".join(lines), parse_mode="HTML")
+        await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=get_back_to_admin_keyboard())
     except Exception:
         logger.exception("handle_pending_payments failed")
         await message.answer(MSG_ERROR_GENERIC)
@@ -130,7 +132,10 @@ async def handle_view_proof(
 
 @router.message(Command("approvepayment"))
 async def handle_approve_payment(
-    message: Message, order_service: OrderService, bot: Bot
+    message: Message,
+    order_service: OrderService,
+    bot: Bot,
+    product_service: ProductService | None = None,
 ) -> None:
     """
     Handle /approvepayment <id> — confirm the order and notify the user.
@@ -147,29 +152,22 @@ async def handle_approve_payment(
     order_id = int(args[1])
 
     try:
-        # Confirm the order via service
-        order = await order_service.confirm_order(order_id)
-        await message.answer(
-            f"🟢 <b>Order #{order.id} Approved!</b>\n\nStatus updated to: {order.status_display}",
-            parse_mode="HTML",
+        from bot.handlers.fulfillment import fulfill_and_notify_order
+        # Confirm and deliver the digital product (PDF) if available
+        await fulfill_and_notify_order(
+            order_id=order_id,
+            order_service=order_service,
+            product_service=product_service,
+            bot=bot,
         )
 
-        # Notify the buyer
-        try:
-            await bot.send_message(
-                chat_id=order.user_id,
-                text=(
-                    f"🎉 <b>Payment Approved!</b>\n\n"
-                    f"📦 Order ID: <code>{order.id}</code>\n"
-                    f"💰 Amount: {order.amount_display}\n"
-                    f"🔖 Status: {order.status_display}\n\n"
-                    f"Your order is now being processed. Thank you for your purchase!"
-                ),
-                parse_mode="HTML",
-            )
-            logger.info("Buyer notified of payment approval | order_id=%s | buyer_id=%s", order.id, order.user_id)
-        except Exception as notify_exc:
-            logger.error("Failed to notify buyer | order_id=%s | error=%s", order.id, notify_exc)
+        order = await order_service.get_order(order_id)
+        status_display = order.status_display if order else "Approved"
+
+        await message.answer(
+            f"🟢 <b>Order #{order_id} Approved!</b>\n\nStatus updated to: {status_display}",
+            parse_mode="HTML",
+        )
 
     except OrderServiceError as exc:
         await message.answer(f"❌ {exc}")
@@ -259,7 +257,7 @@ async def handle_tickets_list(
     try:
         tickets = await support_service.list_open_tickets()
         if not tickets:
-            await message.answer("🎫 <b>Support Tickets</b>\n\nNo open tickets at the moment.")
+            await message.answer("🎫 <b>Support Tickets</b>\n\nNo open tickets at the moment.", reply_markup=get_back_to_admin_keyboard())
             return
 
         lines = ["🎫 <b>Open Support Tickets:</b>\n"]
@@ -273,7 +271,7 @@ async def handle_tickets_list(
             )
             lines.append("")
 
-        await message.answer("\n".join(lines), parse_mode="HTML")
+        await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=get_back_to_admin_keyboard())
     except Exception:
         logger.exception("handle_tickets_list failed")
         await message.answer(MSG_ERROR_GENERIC)
@@ -484,5 +482,64 @@ async def handle_unban_user(
     except Exception:
         logger.exception("handle_unban_user failed | target_user_id=%s", target_user_id)
         await message.answer(MSG_ERROR_GENERIC)
+
+
+@router.callback_query(F.data.startswith("admin_"))
+async def handle_admin_callbacks(
+    callback: CallbackQuery,
+    order_service: OrderService,
+    support_service: SupportService,
+    bot: Bot,
+    product_service: ProductService,
+) -> None:
+    """Handle admin interaction callbacks for payment proofs and Admin Panel options."""
+    user = callback.from_user
+    if not user or not is_admin(user.id):
+        await callback.answer("❌ Unauthorized.", show_alert=True)
+        return
+
+    data_parts = callback.data.split(":", 1)
+    prefix = data_parts[0]
+    payload = data_parts[1] if len(data_parts) > 1 else ""
+
+    # Answer the callback query to clear loader state
+    await callback.answer()
+
+    message = callback.message
+    if not message:
+        return
+
+    if prefix == "admin_menu":
+        if payload == "payments":
+            new_message = message.model_copy(update={"from_user": callback.from_user, "text": "/pendingpayments"})
+            await handle_pending_payments(new_message, order_service)
+        elif payload == "tickets":
+            new_message = message.model_copy(update={"from_user": callback.from_user, "text": "/tickets"})
+            await handle_tickets_list(new_message, support_service)
+        elif payload == "broadcast":
+            broadcast_instructions = (
+                "📢 <b>Broadcast Announcement</b>\n\n"
+                "To send a broadcast message to all registered users, please use the following command format:\n\n"
+                "<code>/broadcast &lt;your message text here&gt;</code>\n\n"
+                "Example:\n"
+                "<code>/broadcast We have added new payment methods!</code>"
+            )
+            try:
+                await message.edit_text(broadcast_instructions, parse_mode="HTML", reply_markup=get_back_to_admin_keyboard())
+            except Exception:
+                await message.answer(broadcast_instructions, parse_mode="HTML", reply_markup=get_back_to_admin_keyboard())
+        return
+
+    order_id = int(payload)
+    if prefix == "admin_proof":
+        new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/proof {order_id}"})
+        await handle_view_proof(new_message, order_service, bot)
+    elif prefix == "admin_approve":
+        new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/approvepayment {order_id}"})
+        await handle_approve_payment(new_message, order_service, bot, product_service)
+    elif prefix == "admin_reject":
+        new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/rejectpayment {order_id} Screenshot was invalid or unreadable. Please check and re-upload."})
+        await handle_reject_payment(new_message, order_service, bot)
+
 
 

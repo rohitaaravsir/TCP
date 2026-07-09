@@ -114,6 +114,34 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------
+    # OCR Payment Verification (Sprint 7)
+    # ------------------------------------------------------------------
+    ocr_receiver_name: str = Field(
+        default="",
+        description="Your merchant/bank account name shown on payment receipts. "
+                    "Must match what appears in the screenshot (e.g. 'Rohit Kumar').",
+    )
+    ocr_upi_id: str = Field(
+        default="",
+        description="Your UPI ID (e.g. rohit@upi). Used as a soft check on receipts.",
+    )
+    ocr_auto_approve_threshold: float = Field(
+        default=0.90,
+        description="Confidence score (0.0-1.0) at or above which payments are "
+                    "auto-approved without admin review.",
+    )
+    ocr_time_freshness_minutes: int = Field(
+        default=30,
+        description="Max minutes between screenshot time and current time for "
+                    "the time-freshness bonus check.",
+    )
+    ocr_time_hard_block_hours: int = Field(
+        default=2,
+        description="Screenshots older than this many hours are hard-blocked "
+                    "and always routed to manual review.",
+    )
+
+    # ------------------------------------------------------------------
     # Convenience helpers
     # ------------------------------------------------------------------
     @property

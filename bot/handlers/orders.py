@@ -19,11 +19,12 @@ from __future__ import annotations
 
 import logging
 
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 
 from core.constants import MSG_ERROR_GENERIC
+from bot.keyboards import get_order_checkout_keyboard, get_generic_main_menu_keyboard
 from schemas.order import OrderSummarySchema
 from services.order_service import OrderService, OrderServiceError
 
@@ -100,6 +101,7 @@ async def handle_place_order(
             f"📸 To complete your purchase, send your payment screenshot.\n"
             f"Your order ID is <code>{order.id}</code> — keep it safe.",
             parse_mode="HTML",
+            reply_markup=get_order_checkout_keyboard(order.id),
         )
         logger.info(
             "Order placed via handler | user_id=%s | product_id=%s | order_id=%s",
@@ -143,7 +145,7 @@ async def handle_my_orders(
             lines.append("")  # blank line between orders
 
         lines.append("💡 Use <code>/orderstatus &lt;id&gt;</code> for full details.")
-        await message.answer("\n".join(lines), parse_mode="HTML")
+        await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=get_generic_main_menu_keyboard())
 
         logger.info(
             "Order history displayed | user_id=%s | count=%d",
@@ -244,3 +246,20 @@ async def handle_cancel_order(
     except Exception:
         logger.exception("handle_cancel_order failed | user_id=%s | order_id=%s", user.id, order_id)
         await message.answer(MSG_ERROR_GENERIC)
+
+
+@router.callback_query(F.data.startswith("cancel_order:"))
+async def handle_cancel_order_callback(
+    callback: CallbackQuery,
+    order_service: OrderService,
+) -> None:
+    """Handle click on Cancel Order inline button."""
+    order_id = int(callback.data.split(":", 1)[1])
+    await callback.answer()
+
+    message = callback.message
+    if not message:
+        return
+    new_message = message.model_copy(update={"from_user": callback.from_user, "text": f"/cancelorder {order_id}"})
+
+    await handle_cancel_order(new_message, order_service)

@@ -11,7 +11,9 @@ import logging
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
+
+from bot.keyboards import get_support_menu_keyboard
 
 from bot.states.support import SupportStates
 from config import settings
@@ -80,7 +82,7 @@ async def handle_support_start(
         await state.set_state(SupportStates.waiting_for_user)
         await state.update_data(ticket_id=ticket.id)
 
-        # Notify user
+        # Notify user with persistent support menu options keyboard
         if ticket.is_assigned_to_human:
             await message.answer(
                 "💬 <b>Support Session Active</b>\n\n"
@@ -88,6 +90,7 @@ async def handle_support_start(
                 "Type your message below and a support agent will reply to you.\n\n"
                 "Send /exit to close support.",
                 parse_mode="HTML",
+                reply_markup=get_support_menu_keyboard(),
             )
         else:
             await message.answer(
@@ -96,6 +99,7 @@ async def handle_support_start(
                 "If you need to speak with a human, just send /human.\n\n"
                 "Send /exit at any time to end support.",
                 parse_mode="HTML",
+                reply_markup=get_support_menu_keyboard(),
             )
         logger.info("User entered support state | user_id=%s | ticket_id=%s", user.id, ticket.id)
 
@@ -127,6 +131,7 @@ async def handle_support_exit(
             "❌ <b>Support Chat Closed</b>\n\n"
             "Your support session has ended. You are now back to the main menu.",
             parse_mode="HTML",
+            reply_markup=ReplyKeyboardRemove(),
         )
         logger.info("User exited support chat | user_id=%s | ticket_id=%s", user.id, ticket_id)
     except Exception:
@@ -186,6 +191,14 @@ async def handle_support_message(
     """Process message in support FSM state."""
     user = message.from_user
     if user is None or not message.text:
+        return
+
+    # 0. Intercept custom persistent screen keyboard button clicks
+    if message.text == "👨‍💻 Speak to Human":
+        await handle_support_human(message, state, support_service, bot)
+        return
+    elif message.text == "❌ Exit Support":
+        await handle_support_exit(message, state, support_service)
         return
 
     data = await state.get_data()
